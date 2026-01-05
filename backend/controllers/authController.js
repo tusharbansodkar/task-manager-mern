@@ -84,13 +84,10 @@ const login = async (req, res) => {
 
     // Return user data with JWT
     const userResponse = user.toObject();
+    delete userResponse.password;
 
     return res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      profileImageURL: user.profileImageURL,
+      ...userResponse,
       token: generateToken(user._id),
     });
   } catch (error) {
