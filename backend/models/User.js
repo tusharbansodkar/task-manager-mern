@@ -7,6 +7,7 @@ const userSchema = new mongoose.Schema(
     password: { type: String, required: true },
     profileImageURL: { type: String, default: null },
     role: { type: String, enum: ["member", "admin"], default: "member" },
+    isDeleted: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
