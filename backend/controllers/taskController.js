@@ -39,10 +39,10 @@ const createTask = async (req, res) => {
       todoChecklist,
     } = req.body;
 
-    if (!Array.isArray(todoChecklist)) {
+    if (!Array.isArray(assignedTo)) {
       return res
         .status(400)
-        .json({ message: "Todo checklist must be an array of user IDs." });
+        .json({ message: "Assigned to must be an array of user IDs." });
     }
 
     const newTask = await Task.create({
