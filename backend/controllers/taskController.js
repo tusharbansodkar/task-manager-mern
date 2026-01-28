@@ -52,6 +52,7 @@ const createTask = async (req, res) => {
       status,
       dueDate,
       assignedTo,
+      createdBy: req.user._id,
       attachments,
       todoChecklist,
     });
