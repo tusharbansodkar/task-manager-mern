@@ -6,6 +6,37 @@ const Task = require("../models/Task");
 
 const getTasks = async (req, res) => {
   try {
+    const status = req.query.status;
+    let filter = {};
+
+    if (status) {
+      filter.status = status;
+    }
+
+    let tasks;
+
+    if (req.user.role === "admin") {
+      tasks = await Task.find(filter).populate(
+        "assignedTo",
+        "name email profileImageURL",
+      );
+    } else {
+      tasks = await Task.find({ ...filter, assignedTo: req.user._id }).populate(
+        "assignedTo",
+        "name email profileImageURL",
+      );
+    }
+
+    // Add completed todo count to each task
+    tasks = tasks.map((task) => {
+      const completedCount = task.todoChecklist.filter(
+        (item) => item.completed,
+      ).length;
+
+      return { ...task.toObject(), completedTodoCount: completedCount };
+    });
+
+    res.json(tasks);
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }

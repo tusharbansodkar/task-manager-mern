@@ -4,8 +4,10 @@ const jwt = require("jsonwebtoken");
 
 // Generate JWT Token
 
-const generateToken = (userId) => {
-  return jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: "1h" });
+const generateToken = (userId, role) => {
+  return jwt.sign({ id: userId, role: role }, process.env.JWT_SECRET, {
+    expiresIn: "1h",
+  });
 };
 
 // @desc Register new user
@@ -51,7 +53,7 @@ const registerUser = async (req, res) => {
       email: user.email,
       role: user.role,
       profileImageURL: user.profileImageURL,
-      token: generateToken(user._id),
+      token: generateToken(user._id, user.role),
     });
   } catch (error) {
     return res
@@ -61,7 +63,7 @@ const registerUser = async (req, res) => {
 };
 
 // @desc LOGIN user
-// @route POST /api/aut/login
+// @route POST /api/auth/login
 // @access Public
 
 const login = async (req, res) => {
@@ -88,7 +90,7 @@ const login = async (req, res) => {
 
     return res.json({
       ...userResponse,
-      token: generateToken(user._id),
+      token: generateToken(user._id, user.role),
     });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });

@@ -8,8 +8,8 @@ const protect = async (req, res, next) => {
 
     if (token && token.startsWith("Bearer")) {
       token = token.split(" ")[1];
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.user = await User.findById(decoded.id).select("-password");
+      const verified = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = verified;
       next();
     }
   } catch (error) {
@@ -21,7 +21,7 @@ const protect = async (req, res, next) => {
 
 // Middleware for admin-only access
 
-const adminOnly = (req, res, next) => {
+const adminOnly = async (req, res, next) => {
   if (req.user && req.user.role === "admin") {
     next();
   } else {
