@@ -1,10 +1,41 @@
 const mongoose = require("mongoose");
 const User = require("../models/User");
+const Task = require("../models/Task");
 
 const getUsers = async (req, res) => {
   try {
-    const users = await User.find({ isDeleted: false }).select("-password");
-    res.json(users);
+    const users = await User.find({ isDeleted: false })
+      .select("-password")
+      .lean();
+
+    // Add task count to each user
+    const usersWithTasksCount = await Promise.all(
+      users.map(async (user) => {
+        const pendingTasks = await Task.countDocuments({
+          assignedTo: user._id,
+          status: "Pending",
+        });
+
+        const inProgressTasks = await Task.countDocuments({
+          assignedTo: user._id,
+          status: "In Progress",
+        });
+
+        const completedTasks = await Task.countDocuments({
+          assignedTo: user._id,
+          status: "Completed",
+        });
+
+        return {
+          user,
+          pendingTasks,
+          inProgressTasks,
+          completedTasks,
+        };
+      }),
+    );
+
+    res.json(usersWithTasksCount);
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
