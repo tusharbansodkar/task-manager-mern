@@ -43,13 +43,13 @@ const getUsers = async (req, res) => {
 
 const getUserById = async (req, res) => {
   try {
-    const { id } = req.params;
+    const userId = req.params.id;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(404).json({ message: "User not found" });
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "Invalid user ID" });
     }
 
-    const user = await User.findOne({ _id: id, isDeleted: false }).select(
+    const user = await User.findOne({ _id: userId, isDeleted: false }).select(
       "-password",
     );
 

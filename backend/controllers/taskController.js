@@ -1,4 +1,5 @@
 const Task = require("../models/Task");
+const mongoose = require("mongoose");
 
 //@desc   Get all tasks (Admin: all, User: only assigned task)
 //@route  GET /api/tasks
@@ -48,6 +49,21 @@ const getTasks = async (req, res) => {
 
 const getTaskById = async (req, res) => {
   try {
+    const taskId = req.params.id;
+
+    if (!mongoose.Types.ObjectId.isValid(taskId)) {
+      return res.status(400).json({ message: "Invalid task ID" });
+    }
+
+    const task = await Task.findById(taskId)
+      .populate("assignedTo createdBy", "name email profileImageURL")
+      .lean();
+
+    if (!task) {
+      return res.status(404).json({ message: "Task not found" });
+    }
+
+    res.status(200).json(task);
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
