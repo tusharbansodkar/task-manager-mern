@@ -6,6 +6,7 @@ const mongoose = require("mongoose");
 //@access Private
 
 const getTasks = async (req, res) => {
+  console.log("User ID from token:", req.user.id);
   try {
     const status = req.query.status;
     let filter = {};
@@ -22,7 +23,7 @@ const getTasks = async (req, res) => {
         "name email profileImageURL",
       );
     } else {
-      tasks = await Task.find({ ...filter, assignedTo: req.user._id }).populate(
+      tasks = await Task.find({ ...filter, assignedTo: req.user.id }).populate(
         "assignedTo",
         "name email profileImageURL",
       );
@@ -37,7 +38,39 @@ const getTasks = async (req, res) => {
       return { ...task.toObject(), completedTodoCount: completedCount };
     });
 
-    res.json(tasks);
+    // Status summary count
+
+    const allTasks = await Task.countDocuments(
+      req.user.role === "admin" ? {} : { assignedTo: req.user.id },
+    );
+
+    const pendingTasks = await Task.countDocuments({
+      ...filter,
+      status: "Pending",
+      ...(req.user.role !== "admin" && { assignedTo: req.user.id }),
+    });
+
+    const inProgressTasks = await Task.countDocuments({
+      ...filter,
+      status: "In Progress",
+      ...(req.user.role !== "admin" && { assignedTo: req.user.id }),
+    });
+
+    const completedTasks = await Task.countDocuments({
+      ...filter,
+      status: "Completed",
+      ...(req.user.role !== "admin" && { assignedTo: req.user.id }),
+    });
+
+    res.json({
+      tasks,
+      statusSummary: {
+        all: allTasks,
+        pending: pendingTasks,
+        inProgress: inProgressTasks,
+        completed: completedTasks,
+      },
+    });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
@@ -118,6 +151,52 @@ const createTask = async (req, res) => {
 
 const updateTask = async (req, res) => {
   try {
+    const taskId = req.params.id;
+
+    if (!mongoose.Types.ObjectId.isValid(taskId)) {
+      return res.status(400).json({ message: "Invalid task ID" });
+    }
+
+    const task = await Task.findById(taskId);
+
+    if (!task) {
+      return res.status(404).json({ message: "Task not found" });
+    }
+
+    // Permission check
+    if (req.user.role !== "admin" && !task.assignedTo.includes(req.user.id)) {
+      return res.status(403).json({
+        message: "Forbidden: You don't have permission to update this task.",
+      });
+    }
+
+    // Field restrictions
+    if (req.user.role !== "admin") {
+      task.title = req.body.title || task.title;
+      task.description = req.body.description || task.description;
+      task.priority = req.body.priority || task.priority;
+      task.status = req.body.status || task.status;
+      task.dueDate = req.body.dueDate || task.dueDate;
+      task.attachments = req.body.attachments || task.attachments;
+      task.todoChecklist = req.body.todoChecklist || task.todoChecklist;
+
+      if (req.body.assignedTo) {
+        if (!Array.isArray(req.body.assignedTo)) {
+          return res
+            .status(400)
+            .json({ message: "Assigned to must be an array of user IDs." });
+        }
+        task.assignedTo = req.body.assignedTo;
+      }
+    } else {
+      task.status = req.body.status || task.status;
+      task.todoChecklist = req.body.todoChecklist || task.todoChecklist;
+    }
+
+    const updatedTask = await task.save();
+    await updatedTask.populate("assignedTo", "name email profileImageURL");
+
+    res.json({ message: "Task updated successfully", task: updatedTask });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
