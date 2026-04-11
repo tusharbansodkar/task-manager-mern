@@ -18,15 +18,16 @@ const getTasks = async (req, res) => {
     let tasks;
 
     if (req.user.role === "admin") {
-      tasks = await Task.find(filter).populate(
+      tasks = await Task.find({ ...filter, isDeleted: false }).populate(
         "assignedTo",
         "name email profileImageURL",
       );
     } else {
-      tasks = await Task.find({ ...filter, assignedTo: req.user.id }).populate(
-        "assignedTo",
-        "name email profileImageURL",
-      );
+      tasks = await Task.find({
+        ...filter,
+        assignedTo: req.user.id,
+        isDeleted: false,
+      }).populate("assignedTo", "name email profileImageURL");
     }
 
     // Add completed todo count to each task
@@ -88,7 +89,7 @@ const getTaskById = async (req, res) => {
       return res.status(400).json({ message: "Invalid task ID" });
     }
 
-    const task = await Task.findById(taskId)
+    const task = await Task.findOne({ _id: taskId, isDeleted: false })
       .populate("assignedTo createdBy", "name email profileImageURL")
       .lean();
 
@@ -175,7 +176,6 @@ const updateTask = async (req, res) => {
       task.title = req.body.title || task.title;
       task.description = req.body.description || task.description;
       task.priority = req.body.priority || task.priority;
-      task.status = req.body.status || task.status;
       task.dueDate = req.body.dueDate || task.dueDate;
       task.attachments = req.body.attachments || task.attachments;
       task.todoChecklist = req.body.todoChecklist || task.todoChecklist;
@@ -208,6 +208,35 @@ const updateTask = async (req, res) => {
 
 const deleteTask = async (req, res) => {
   try {
+    const taskId = req.params.id;
+
+    if (!mongoose.Types.ObjectId.isValid(taskId)) {
+      return res.status(400).json({ message: "Invalid task ID" });
+    }
+
+    const task = await Task.findOne({ _id: taskId, isDeleted: false });
+
+    if (!task) {
+      return res.status(404).json({ message: "Task not found" });
+    }
+
+    // Permission check for admin or assigned user
+    const isAssigned = task.assignedTo.some(
+      (userId) => userId.toString() === req.user.id,
+    );
+
+    if (req.user.role !== "admin" && !isAssigned) {
+      return res.status(403).json({
+        message: "Forbidden: You don't have permission to delete this task.",
+      });
+    }
+
+    task.isDeleted = true;
+    task.deletedAt = new Date();
+    task.deletedBy = req.user.id;
+
+    await task.save();
+    res.json({ message: "Task deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
@@ -219,6 +248,53 @@ const deleteTask = async (req, res) => {
 
 const updateTaskStatus = async (req, res) => {
   try {
+    const taskId = req.params.id;
+    const newStatus = req.body.status;
+
+    if (!mongoose.Types.ObjectId.isValid(taskId)) {
+      return res.status(400).json({ message: "Invalid task ID" });
+    }
+
+    const task = await Task.findOne({
+      _id: taskId,
+      isDeleted: false,
+    });
+
+    if (!task) {
+      return res.status(404).json({ message: "Task not found" });
+    }
+
+    // Check assignment
+    const isAssigned = task.assignedTo.some(
+      (userId) => userId.toString() === req.user.id,
+    );
+
+    // Authorization
+    if (req.user.role !== "admin" && !isAssigned) {
+      return res.status(403).json({
+        message:
+          "Forbidden: You don't have permission to update this task status.",
+      });
+    }
+
+    // Role-based logic
+    if (req.user.role !== "admin") {
+      // Only allow Pending -> In Progress
+      if (task.status !== "Pending" || newStatus !== "In Progress") {
+        return res.status(403).json({
+          message:
+            "You can only change status from 'Pending' to 'In Progress'.",
+        });
+      }
+    }
+
+    task.status = newStatus;
+    await task.save();
+
+    res.status(200).json({
+      message: "Task status updated successfully",
+      task,
+    });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
