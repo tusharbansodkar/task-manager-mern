@@ -6,7 +6,6 @@ const mongoose = require("mongoose");
 //@access Private
 
 const getTasks = async (req, res) => {
-  console.log("User ID from token:", req.user.id);
   try {
     const status = req.query.status;
     let filter = {};
@@ -289,6 +288,12 @@ const updateTaskStatus = async (req, res) => {
     }
 
     task.status = newStatus;
+
+    if (newStatus === "Completed") {
+      task.todoChecklist.forEach((item) => (item.completed = true));
+      task.progress = 100;
+    }
+
     await task.save();
 
     res.status(200).json({
@@ -306,6 +311,61 @@ const updateTaskStatus = async (req, res) => {
 
 const updateTaskChecklist = async (req, res) => {
   try {
+    const taskId = req.params.id;
+    const todoChecklist = req.body.todoChecklist;
+
+    if (!mongoose.Types.ObjectId.isValid(taskId)) {
+      return res.status(400).json({ message: "Invalid task ID" });
+    }
+
+    const task = await Task.findOne({
+      _id: taskId,
+      isDeleted: false,
+    });
+
+    if (!task) {
+      return res.status(404).json({ message: "Task not found" });
+    }
+
+    // Check assignment
+    const isAssigned = task.assignedTo.some(
+      (userId) => userId.toString() === req.user.id,
+    );
+
+    // Authorization
+    if (req.user.role !== "admin" && !isAssigned) {
+      return res.status(403).json({
+        message:
+          "Forbidden: You don't have permission to update this task checklist.",
+      });
+    }
+
+    task.todoChecklist = todoChecklist;
+
+    // Update progress
+    const completedCount = task.todoChecklist.filter(
+      (item) => item.completed,
+    ).length;
+    const totalCount = task.todoChecklist.length;
+    task.progress =
+      totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100);
+
+    // Auto-update status to Completed if all todos are done
+    if (task.progress === 100) {
+      task.status = "Completed";
+    } else if (task.progress > 0) {
+      task.status = "In Progress";
+    } else {
+      task.status = "Pending";
+    }
+
+    const updatedTask = await task.save();
+    await updatedTask.populate("assignedTo", "name email profileImageURL");
+
+    res.status(200).json({
+      message: "Task checklist updated successfully",
+      task: updatedTask,
+    });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
