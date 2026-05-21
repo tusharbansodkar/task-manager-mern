@@ -26,8 +26,4 @@ app.use("/api/task", taskRoutes);
 
 const PORT = process.env.PORT || 5000;
 
-app.get("/home", (req, res) => {
-  return res.send("welcome");
-});
-
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
