@@ -1,16 +1,20 @@
 const jwt = require("jsonwebtoken");
 
 // Middleware to protect routes
-const protect = async (req, res, next) => {
+const protect = (req, res, next) => {
   try {
-    let token = req.header("Authorization");
+    const authHeader = req.headers.authorization || req.header("Authorization");
 
-    if (token && token.startsWith("Bearer")) {
-      token = token.split(" ")[1];
-      const verified = jwt.verify(token, process.env.JWT_SECRET);
-      req.user = verified;
-      next();
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res
+        .status(401)
+        .json({ message: "Not authorized, token missing." });
     }
+
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
   } catch (error) {
     return res
       .status(401)
@@ -20,12 +24,11 @@ const protect = async (req, res, next) => {
 
 // Middleware for admin-only access
 
-const adminOnly = async (req, res, next) => {
-  if (req.user && req.user.role === "admin") {
-    next();
-  } else {
+const adminOnly = (req, res, next) => {
+  if (req.user?.role !== "admin") {
     return res.status(403).json({ message: "Access denied, admin only." });
   }
+  next();
 };
 
 module.exports = { protect, adminOnly };
