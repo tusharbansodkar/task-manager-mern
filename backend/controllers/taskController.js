@@ -146,7 +146,7 @@ const updateTask = async (req, res) => {
       return res.status(400).json({ message: "Invalid task ID" });
     }
 
-    const task = await Task.findById(taskId);
+    const task = await Task.findOne({ _id: taskId, isDeleted: false });
 
     if (!task) {
       return res.status(404).json({ message: "Task not found" });
