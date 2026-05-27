@@ -1,4 +1,5 @@
 const Task = require("../models/Task");
+const User = require("../models/User");
 const mongoose = require("mongoose");
 
 //@desc   Get all tasks (Admin: all, User: only assigned task)
@@ -366,6 +367,116 @@ const updateTaskChecklist = async (req, res) => {
 
 const getDashboardData = async (req, res) => {
   try {
+    // Get all non-deleted tasks and users
+    const allTasks = await Task.find({ isDeleted: false })
+      .populate("assignedTo", "name email")
+      .lean();
+    const allUsers = await User.find({ isDeleted: false }).lean();
+
+    // Task Statistics
+    const totalTasks = allTasks.length;
+    const pendingTasks = allTasks.filter((t) => t.status === "Pending").length;
+    const inProgressTasks = allTasks.filter(
+      (t) => t.status === "In Progress",
+    ).length;
+    const completedTasks = allTasks.filter(
+      (t) => t.status === "Completed",
+    ).length;
+    const completionRate =
+      totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+    // Priority Distribution
+    const highPriorityCount = allTasks.filter(
+      (t) => t.priority === "High",
+    ).length;
+    const mediumPriorityCount = allTasks.filter(
+      (t) => t.priority === "Medium",
+    ).length;
+    const lowPriorityCount = allTasks.filter(
+      (t) => t.priority === "Low",
+    ).length;
+
+    // Overdue and High-Priority Tasks
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const overdueAndHighPriority = allTasks
+      .filter(
+        (t) =>
+          (t.dueDate < today && t.status !== "Completed") ||
+          (t.priority === "High" && t.status !== "Completed"),
+      )
+      .map((t) => ({
+        taskId: t._id,
+        title: t.title,
+        priority: t.priority,
+        dueDate: t.dueDate,
+        assignedTo: t.assignedTo.map((u) => u.name),
+        daysOverdue: Math.floor((today - t.dueDate) / (1000 * 60 * 60 * 24)),
+        status: t.status,
+      }))
+      .slice(0, 10); // Limit to 10 items
+
+    // Team Workload (per user statistics)
+    const teamWorkload = allUsers.map((user) => {
+      const userTasks = allTasks.filter((t) =>
+        t.assignedTo.some((u) => u._id.toString() === user._id.toString()),
+      );
+      const userCompletedTasks = userTasks.filter(
+        (t) => t.status === "Completed",
+      ).length;
+      const userPendingTasks = userTasks.filter(
+        (t) => t.status === "Pending",
+      ).length;
+      const userInProgressTasks = userTasks.filter(
+        (t) => t.status === "In Progress",
+      ).length;
+      const userCompletionRate =
+        userTasks.length > 0
+          ? Math.round((userCompletedTasks / userTasks.length) * 100)
+          : 0;
+
+      return {
+        userId: user._id,
+        userName: user.name,
+        assignedTasksCount: userTasks.length,
+        completedTasksCount: userCompletedTasks,
+        pendingTasksCount: userPendingTasks,
+        inProgressTasksCount: userInProgressTasks,
+        completionRate: userCompletionRate,
+      };
+    });
+
+    // User Performance (completion rates and active tasks)
+    const userPerformance = teamWorkload
+      .filter((u) => u.assignedTasksCount > 0)
+      .sort((a, b) => b.completionRate - a.completionRate)
+      .map((u) => ({
+        userId: u.userId,
+        userName: u.userName,
+        completionRate: u.completionRate,
+        totalAssignedTasks: u.assignedTasksCount,
+        activeTasksCount: u.pendingTasksCount + u.inProgressTasksCount,
+      }));
+
+    const dashboardData = {
+      taskStatistics: {
+        total: totalTasks,
+        pending: pendingTasks,
+        inProgress: inProgressTasks,
+        completed: completedTasks,
+        completionRate,
+      },
+      priorityDistribution: {
+        high: highPriorityCount,
+        medium: mediumPriorityCount,
+        low: lowPriorityCount,
+      },
+      overdueAndHighPriority,
+      teamWorkload,
+      userPerformance,
+    };
+
+    res.status(200).json(dashboardData);
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
@@ -377,6 +488,86 @@ const getDashboardData = async (req, res) => {
 
 const getUserDashboardData = async (req, res) => {
   try {
+    const userId = req.user.id;
+
+    // Get all tasks assigned to the current user
+    const userTasks = await Task.find({
+      assignedTo: userId,
+      isDeleted: false,
+    })
+      .populate("createdBy", "name email")
+      .lean();
+
+    // My Tasks Summary
+    const totalUserTasks = userTasks.length;
+    const userPendingTasks = userTasks.filter(
+      (t) => t.status === "Pending",
+    ).length;
+    const userInProgressTasks = userTasks.filter(
+      (t) => t.status === "In Progress",
+    ).length;
+    const userCompletedTasks = userTasks.filter(
+      (t) => t.status === "Completed",
+    ).length;
+    const userCompletionRate =
+      totalUserTasks > 0
+        ? Math.round((userCompletedTasks / totalUserTasks) * 100)
+        : 0;
+
+    // Upcoming Deadlines (next 30 days, sorted by due date)
+    const today = new Date();
+    // const thirtyDaysFromNow = new Date(
+    //   today.getTime() + 30 * 24 * 60 * 60 * 1000,
+    // );
+    const upcomingDeadlines = userTasks
+      .filter((t) => t.dueDate >= today && t.status !== "Completed")
+      .map((t) => ({
+        taskId: t._id,
+        title: t.title,
+        dueDate: t.dueDate,
+        priority: t.priority,
+        status: t.status,
+        daysRemaining: Math.ceil((t.dueDate - today) / (1000 * 60 * 60 * 24)),
+      }))
+      .sort((a, b) => a.dueDate - b.dueDate)
+      .slice(0, 5); // Limit to 5 upcoming tasks
+
+    // Tasks Completed This Week
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const tasksCompletedThisWeek = userTasks.filter(
+      (t) => t.status === "Completed" && t.updatedAt >= weekAgo,
+    ).length;
+
+    // Assigned Tasks (all tasks with progress)
+    const assignedTasks = userTasks
+      .map((t) => ({
+        taskId: t._id,
+        title: t.title,
+        priority: t.priority,
+        status: t.status,
+        dueDate: t.dueDate,
+        progress: t.progress,
+        createdBy: t.createdBy?.name || "Unknown",
+      }))
+      .sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate));
+
+    const userDashboardData = {
+      myTasksSummary: {
+        total: totalUserTasks,
+        pending: userPendingTasks,
+        inProgress: userInProgressTasks,
+        completed: userCompletedTasks,
+      },
+      myProgress: {
+        completionRate: userCompletionRate,
+        tasksCompletedThisWeek,
+        totalAssignedTasks: totalUserTasks,
+      },
+      upcomingDeadlines,
+      assignedTasks,
+    };
+
+    res.status(200).json(userDashboardData);
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
