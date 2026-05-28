@@ -18,14 +18,14 @@ const getTasks = async (req, res) => {
     let tasks =
       req.user.role === "admin"
         ? await Task.find({ ...filter, isDeleted: false })
-            .populate("assignedTo", "name email profileImageURL")
+            .populate("assignedTo createdBy", "name email profileImageURL")
             .lean()
         : await Task.find({
             ...filter,
             assignedTo: req.user.id,
             isDeleted: false,
           })
-            .populate("assignedTo", "name email profileImageURL")
+            .populate("assignedTo createdBy", "name email profileImageURL")
             .lean();
 
     tasks = tasks.map((task) => {
