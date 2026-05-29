@@ -12,6 +12,7 @@ yarn-error.log*
 # Build outputs
 dist/
 build/
+.vite
 
 # OS files
 .DS_Store
@@ -24,3 +25,4 @@ Thumbs.db
 # Logs
 logs
 *.log
+
