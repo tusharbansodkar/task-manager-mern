@@ -58,7 +58,10 @@ const Login = () => {
 
         <p className="text-xs mt-2">
           Don't have an account?
-          <Link to="/signup" className="text-blue-800 underline">
+          <Link
+            to="task-manager-mern/signup"
+            className="text-blue-800 underline"
+          >
             SignUp
           </Link>
         </p>

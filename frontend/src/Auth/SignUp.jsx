@@ -84,7 +84,7 @@ const SignUp = () => {
 
         <p className="text-xs mt-2">
           Already have an account?
-          <Link to="/" className="text-blue-800 underline">
+          <Link to="task-manager-mern/" className="text-blue-800 underline">
             LogIn
           </Link>
         </p>
