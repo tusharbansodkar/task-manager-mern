@@ -4,7 +4,7 @@ import { createBrowserRouter, RouterProvider } from "react-router";
 
 const router = createBrowserRouter([
   {
-    path: "/",
+    path: "task-manager-mern/",
     element: <Login />,
   },
   {
