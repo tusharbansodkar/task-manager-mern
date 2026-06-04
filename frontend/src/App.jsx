@@ -8,7 +8,7 @@ const router = createBrowserRouter([
     element: <Login />,
   },
   {
-    path: "task-manager-mern/signup",
+    path: "/signup",
     element: <SignUp />,
   },
 ]);
